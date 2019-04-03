@@ -1,288 +1,171 @@
-var utils = module.exports = {
-
-    /**
-     *  Convert a string template to a dom fragment
-     */
-    toFragment: require('./fragment'),
-
-    /**
-     *  Parse the various types of template options
-     */
-    parseTemplateOption: require('./template-parser.js'),
-
-    /**
-     *  get a value from an object keypath
-     */
-    get: function (obj, key) {
-        /* jshint eqeqeq: false */
-        key = normalizeKeypath(key)
-        if (key.indexOf('.') < 0) {
-            return obj[key]
-        }
-        var path = key.split('.'),
-            d = -1, l = path.length
-        while (++d < l && obj != null) {
-            obj = obj[path[d]]
-        }
-        return obj
-    },
-
-    /**
-     *  set a value to an object keypath
-     */
-    set: function (obj, key, val) {
-        /* jshint eqeqeq: false */
-        key = normalizeKeypath(key)
-        if (key.indexOf('.') < 0) {
-            obj[key] = val
-            return
-        }
-        var path = key.split('.'),
-            d = -1, l = path.length - 1
-        while (++d < l) {
-            if (obj[path[d]] == null) {
-                obj[path[d]] = {}
-            }
-            obj = obj[path[d]]
-        }
-        obj[path[d]] = val
-    },
-
-    /**
-     *  return the base segment of a keypath
-     */
-    baseKey: function (key) {
-        return key.indexOf('.') > 0
-            ? key.split('.')[0]
-            : key
-    },
-
-    /**
-     *  Create a prototype-less object
-     *  which is a better hash/map
-     */
-    hash: function () {
-        return Object.create(null)
-    },
-
-    /**
-     *  get an attribute and remove it.
-     */
-    attr: function (el, type) {
-        var attr = config.prefix + '-' + type,
-            val = el.getAttribute(attr)
-        if (val !== null) {
-            el.removeAttribute(attr)
-        }
-        return val
-    },
-
-    /**
-     *  Define an ienumerable property
-     *  This avoids it being included in JSON.stringify
-     *  or for...in loops.
-     */
-    defProtected: function (obj, key, val, enumerable, writable) {
-        def(obj, key, {
-            value        : val,
-            enumerable   : enumerable,
-            writable     : writable,
-            configurable : true
-        })
-    },
-
-    /**
-     *  A less bullet-proof but more efficient type check
-     *  than Object.prototype.toString
-     */
-    isObject: function (obj) {
-        return typeof obj === OBJECT && obj && !Array.isArray(obj)
-    },
-
-    /**
-     *  A more accurate but less efficient type check
-     */
-    isTrueObject: function (obj) {
-        return toString.call(obj) === '[object Object]'
-    },
-
-    /**
-     *  Most simple bind
-     *  enough for the usecase and fast than native bind()
-     */
-    bind: function (fn, ctx) {
-        return function (arg) {
-            return fn.call(ctx, arg)
-        }
-    },
-
-    /**
-     *  Make sure null and undefined output empty string
-     */
-    guard: function (value) {
-        /* jshint eqeqeq: false, eqnull: true */
-        return value == null
-            ? ''
-            : (typeof value == 'object')
-                ? JSON.stringify(value)
-                : value
-    },
-
-    /**
-     *  When setting value on the VM, parse possible numbers
-     */
-    checkNumber: function (value) {
-        return (isNaN(value) || value === null || typeof value === 'boolean')
-            ? value
-            : Number(value)
-    },
-
-    /**
-     *  simple extend
-     */
-    extend: function (obj, ext) {
-        for (var key in ext) {
-            if (obj[key] !== ext[key]) {
-                obj[key] = ext[key]
-            }
-        }
-        return obj
-    },
-
-    /**
-     *  filter an array with duplicates into uniques
-     */
-    unique: function (arr) {
-        var hash = utils.hash(),
-            i = arr.length,
-            key, res = []
-        while (i--) {
-            key = arr[i]
-            if (hash[key]) continue
-            hash[key] = 1
-            res.push(key)
-        }
-        return res
-    },
-
-    /**
-     *  Convert the object to a ViewModel constructor
-     *  if it is not already one
-     */
-    toConstructor: function (obj) {
-        ViewModel = ViewModel || require('./viewmodel')
-        return utils.isObject(obj)
-            ? ViewModel.extend(obj)
-            : typeof obj === 'function'
-                ? obj
-                : null
-    },
-
-    /**
-     *  Check if a filter function contains references to `this`
-     *  If yes, mark it as a computed filter.
-     */
-    checkFilter: function (filter) {
-        if (THIS_RE.test(filter.toString())) {
-            filter.computed = true
-        }
-    },
-
-    /**
-     *  convert certain option values to the desired format.
-     */
-    processOptions: function (options) {
-        var components = options.components,
-            partials   = options.partials,
-            template   = options.template,
-            filters    = options.filters,
-            key
-        if (components) {
-            for (key in components) {
-                components[key] = utils.toConstructor(components[key])
-            }
-        }
-        if (partials) {
-            for (key in partials) {
-                partials[key] = utils.parseTemplateOption(partials[key])
-            }
-        }
-        if (filters) {
-            for (key in filters) {
-                utils.checkFilter(filters[key])
-            }
-        }
-        if (template) {
-            options.template = utils.parseTemplateOption(template)
-        }
-    },
-
-    /**
-     *  used to defer batch updates
-     */
-    nextTick: function (cb, context) {
-        if (context) {
-            defer(utils.bind(cb, context), 0)
-        }
-        else {
-            defer(cb, 0)
-        }
-    },
-
-    /**
-     *  add class for IE
-     *  uses classList if available
-     */
-    addClass: function (el, cls) {
-        if (el.classList) {
-            el.classList.add(cls)
-        } else {
-            var cur = ' ' + utils.getClassName(el) + ' '
-            if (cur.indexOf(' ' + cls + ' ') < 0) {
-                el.setAttribute('class', (cur + cls).trim())
-            }
-        }
-    },
-
-    /**
-     *  remove class for IE
-     */
-    removeClass: function (el, cls) {
-        if (el.classList) {
-            el.classList.remove(cls)
-        } else {
-            var cur = ' ' + utils.getClassName(el) + ' ',
-                tar = ' ' + cls + ' '
-            while (cur.indexOf(tar) >= 0) {
-                cur = cur.replace(tar, ' ')
-            }
-            el.setAttribute('class', cur.trim())
-        }
-    },
-
-    /**
-     *  get class name for IE
-     */
-    getClassName: function(el) {
-        return (el.className instanceof SVGAnimatedString ? el.className.baseVal : el.className)
-    },
-
-    /**
-     *  Convert an object to Array
-     *  used in v-repeat and array filters
-     */
-    objectToArray: function (obj) {
-        var res = [], val, data
-        for (var key in obj) {
-            val = obj[key]
-            data = utils.isObject(val)
-                ? val
-                : { $value: val }
-            data.$key = key
-            res.push(data)
-        }
-        return res
+var config      = require('./config'),
+    ViewModel   = require('./viewmodel'),
+    utils       = require('./utils'),
+    makeHash    = utils.hash,
+    assetTypes  = ['directive', 'filter', 'partial', 'effect', 'component'],
+    // Internal modules that are exposed for plugins
+    pluginAPI   = {
+        utils: utils,
+        config: config,
+        transition: require('./transition'),
+        observer: require('./observer')
     }
+
+ViewModel.options = config.globalAssets = {
+    directives  : require('./directives'),
+    filters     : require('./filters'),
+    partials    : makeHash(),
+    effects     : makeHash(),
+    components  : makeHash()
 }
 
-console.log(utils.hash());
+/**
+ *  Expose asset registration methods
+ *  暴露各个属性的注册方法，比如 component、partial、directive...
+ *  针对 assetTypes 里面的每个属性，在 ViewModel 上挂载一个对应的注册方法，
+ *  即 Vue.component、Vue.directive...
+ */
+assetTypes.forEach(function (type) {
+    // 注册方法，该方法接受一个 id（实际上是名称）和一个值。
+    ViewModel[type] = function (id, value) {
+        var hash = this.options[type + 's'] // Vue.options.components...
+        if (!hash) {
+            // 如果不存在 Vue.options.components 这种属性，新建一个...
+            hash = this.options[type + 's'] = makeHash()
+        }
+        if (!value) return hash[id]
+        // 针对不同属性，处理传入的 value。
+        if (type === 'partial') {
+            // partial 在 Vue 2.0 中已废弃。
+            value = utils.parseTemplateOption(value)
+        } else if (type === 'component') {
+            value = utils.toConstructor(value)
+        } else if (type === 'filter') {
+            utils.checkFilter(value)
+        }
+        // 注册的结果就是挂载到 Vue.options。
+        hash[id] = value
+        return this
+    }
+})
+
+/**
+ *  Set config options
+ *  用于获取和设置全局配置对象的方法。0.11 开始，Vue.config 变成了一个全局配置对象。
+ */
+ViewModel.config = function (opts, val) {
+    if (typeof opts === 'string') {
+        if (val === undefined) {
+            return config[opts]
+        } else {
+            config[opts] = val
+        }
+    } else {
+        utils.extend(config, opts)
+    }
+    return this
+}
+
+/**
+ *  Expose an interface for plugins
+ *  注册 Vue 插件的方法。
+ */
+ViewModel.use = function (plugin) {
+    // 如果是字符串，则 require。
+    if (typeof plugin === 'string') {
+        try {
+            plugin = require(plugin)
+        } catch (e) {
+            utils.warn('Cannot find plugin: ' + plugin)
+            return
+        }
+    }
+
+    // additional parameters
+    // 提取 use 方法的多余参数，稍后传入 plugin.install。
+    var args = [].slice.call(arguments, 1)
+    // 在数组头部插入当前实例。
+    args.unshift(this)
+
+    if (typeof plugin.install === 'function') {
+        // 如果 plugin.install 是一个函数，那么执行。
+        plugin.install.apply(plugin, args)
+    } else {
+        // 否则直接执行 plugin。
+        plugin.apply(null, args)
+    }
+    return this
+}
+
+/**
+ *  Expose internal modules for plugins
+ *  获取内部 plugin 的方法。
+ */
+ViewModel.require = function (module) {
+    return pluginAPI[module]
+}
+
+ViewModel.extend = extend
+ViewModel.nextTick = utils.nextTick
+
+/**
+ *  Expose the main ViewModel class
+ *  and add extend method
+ *  https://cn.vuejs.org/v2/api/#Vue-extend
+ *  接受一些 Vue 构造参数，返回一个 Vue 子类，该子类可以接受新的 Vue 参数从而构造 Vue 实例。
+ *  options 是用于构造父类的参数，这些参数会被子类继承。
+ */
+function extend (options) {
+
+    // 以当前 ViewModel 为父类。
+    var ParentVM = this
+
+    // extend data options need to be copied
+    // on instantiation
+    if (options.data) {
+        // 把 data 挂载到 defaultData，后面应该还会处理。
+        options.defaultData = options.data
+        delete options.data
+    }
+
+    // inherit options
+    // but only when the super class is not the native Vue.
+    // 当 this 不指向 ViewModel 的时候，继承 options。
+    if (ParentVM !== ViewModel) {
+        options = inheritOptions(options, ParentVM.options, true)
+    }
+    // 对 options 的一些属性进行预处理。
+    utils.processOptions(options)
+
+    // 构造子类的构造函数。
+    var ExtendedVM = function (opts, asParent) {
+        if (!asParent) {
+            opts = inheritOptions(opts, options, true)
+        }
+        ParentVM.call(this, opts, true)
+    }
+
+    // inherit prototype props
+    var proto = ExtendedVM.prototype = Object.create(ParentVM.prototype)
+    utils.defProtected(proto, 'constructor', ExtendedVM)
+
+    // allow extended VM to be further extended
+    ExtendedVM.extend  = extend
+    ExtendedVM.super   = ParentVM
+    ExtendedVM.options = options
+
+    // allow extended VM to add its own assets
+    assetTypes.forEach(function (type) {
+        ExtendedVM[type] = ViewModel[type]
+    })
+
+    // allow extended VM to use plugins
+    ExtendedVM.use     = ViewModel.use
+    ExtendedVM.require = ViewModel.require
+
+    return ExtendedVM
+}
+
+console.log(extend({
+    data: { name: 12 }
+}))

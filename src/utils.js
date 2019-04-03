@@ -108,6 +108,7 @@ var utils = module.exports = {
      *  Define an ienumerable property
      *  This avoids it being included in JSON.stringify
      *  or for...in loops.
+     *  设置指定对象的指定属性的 property。
      */
     defProtected: function (obj, key, val, enumerable, writable) {
         def(obj, key, {
@@ -218,6 +219,7 @@ var utils = module.exports = {
 
     /**
      *  convert certain option values to the desired format.
+     *  对 options 进行适配操作。
      */
     processOptions: function (options) {
         var components = options.components,
@@ -226,6 +228,7 @@ var utils = module.exports = {
             filters    = options.filters,
             key
         if (components) {
+            // 遍历所有 options.components，仍然是之前进行过的操作。
             for (key in components) {
                 components[key] = utils.toConstructor(components[key])
             }

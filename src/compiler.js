@@ -1,3 +1,7 @@
+/**
+ * 当前文件主要用于根据 Vue 构造函数接受的配置项构造 Vue 实例。
+ */
+
 var Emitter     = require('./emitter'),
     Observer    = require('./observer'),
     config      = require('./config'),

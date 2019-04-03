@@ -1,3 +1,8 @@
+/**
+ * 该文件主要定义 ViewModel 上的一系列方法。
+ * 比如 $get、$set……等等。
+ */
+
 var Compiler   = require('./compiler'),
     utils      = require('./utils'),
     transition = require('./transition'),
@@ -18,6 +23,8 @@ var Compiler   = require('./compiler'),
 function ViewModel (options) {
     // compile if options passed, if false return. options are passed directly to compiler
     if (options === false) return
+    // 没有返回值、没有显式调用 this，但是传递 this 给了 Compiler……
+    // 这个 this 值同样受 extend 的影响~
     new Compiler(this, options)
 }
 
@@ -29,6 +36,7 @@ var VMProto = ViewModel.prototype
  *  init allows config compilation after instantiation:
  *    var a = new Vue(false)
  *    a.init(config)
+ *  延迟 Vue 的实例化……
  */
 def(VMProto, '$init', function (options) {
     new Compiler(this, options)
