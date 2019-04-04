@@ -41,7 +41,7 @@ var Emitter     = require('./emitter'),
  */
 function Compiler (vm, options) {
 
-    var compiler = this,
+    var compiler = this, // vm 是 ViewModel 实例，compiler 是当前构造的 Compiler 实例。
         key, i
 
     // default state
@@ -64,8 +64,9 @@ function Compiler (vm, options) {
     utils.log('\nnew VM instance: ' + el.tagName + '\n')
 
     // set other compiler properties
+    // 为 compiler 初始化值。
     compiler.vm       = el.vue_vm = vm
-    compiler.bindings = utils.hash()
+    compiler.bindings = utils.hash() // 初始化 bindings 为一个空 hash 对象。
     compiler.dirs     = []
     compiler.deferred = []
     compiler.computed = []
@@ -75,23 +76,27 @@ function Compiler (vm, options) {
     // VM ---------------------------------------------------------------------
 
     // set VM properties
+    // 初始化 Vue 实例，这一步算是在 ViewModel 内部做的。
     vm.$         = {}
-    vm.$el       = el
-    vm.$options  = options
-    vm.$compiler = compiler
+    vm.$el       = el // 当前 Vue 实例的挂载元素
+    vm.$options  = options // 当前 Vue 实例的原始配置参数
+    vm.$compiler = compiler // 挂载当前 Vue 实例的 compiler
     vm.$event    = null
 
     // set parent & root
     var parentVM = options.parent
     if (parentVM) {
+        // 当 options.parentVM 存在的时候，将父子关联起来。
         compiler.parent = parentVM.$compiler
         parentVM.$compiler.children.push(compiler)
-        vm.$parent = parentVM
+        vm.$parent = parentVM // 为 Vue 实例指定 parent。
         // inherit lazy option
         if (!('lazy' in options)) {
+            // 从 parent 处继承 lazy 属性。
             options.lazy = compiler.parent.options.lazy
         }
     }
+    // root 等于最顶层 compiler 对应的 ViewModel 实例。
     vm.$root = getRoot(compiler).vm
 
     // DATA -------------------------------------------------------------------
@@ -209,35 +214,49 @@ var CompilerProto = Compiler.prototype
 /**
  *  Initialize the VM/Compiler's element.
  *  Fill it in with the template if necessary.
+ *  初始化 ViewModel 的挂载元素，根据 options 配置构建一个 el DocumentFragment，等待被挂载。。
  */
 CompilerProto.setupElement = function (options) {
     // create the node first
+    // 如果 options.el 是字符串，则使用 document.querySelector 获取元素。
+    // 否则使用 options.el，如果 options.el 未定义，则构造一个 options.tagName 对应的元素或者 div 元素。
     var el = typeof options.el === 'string'
         ? document.querySelector(options.el)
         : options.el || document.createElement(options.tagName || 'div')
 
+    // 获取到 options.template。
     var template = options.template,
         child, replacer, i, attr, attrs
 
+    // 如果传递了 template……
     if (template) {
         // collect anything already in there
         if (el.hasChildNodes()) {
+            // 如果 el 有子元素。
             this.rawContent = document.createElement('div')
             /* jshint boss: true */
             while (child = el.firstChild) {
+                // 因为 child 引用了 el.firstChild，所以 el.firstChild 会被转移到 rawContent。
+                // 实际上每次循环之后，el 的第一个子元素就被提取出去了。
                 this.rawContent.appendChild(child)
             }
         }
         // replace option: use the first node in
         // the template directly
+        // https://011.vuejs.org/api/options.html#replace
         if (options.replace && template.firstChild === template.lastChild) {
+            // 用 template 替换 el，并且 template 只有一个子元素的时候，深层次拷贝 template。
             replacer = template.firstChild.cloneNode(true)
             if (el.parentNode) {
+                // https://developer.mozilla.org/zh-CN/docs/Web/API/Node/insertBefore
                 el.parentNode.insertBefore(replacer, el)
+                // 插入 replacer 之后移除 el，实现替换。
                 el.parentNode.removeChild(el)
             }
             // copy over attributes
+            // https://developer.mozilla.org/en-US/docs/Web/API/Element/hasAttribute
             if (el.hasAttributes()) {
+                // 如果 el 有自带属性，全部复制到新替换的节点上。
                 i = el.attributes.length
                 while (i--) {
                     attr = el.attributes[i]
@@ -247,12 +266,14 @@ CompilerProto.setupElement = function (options) {
             // replace
             el = replacer
         } else {
+            // 不替换 el 的时候，直接附加到 el 内。
             el.appendChild(template.cloneNode(true))
         }
 
     }
 
     // apply element options
+    // 给 el 设置 id、class 以及其他属性。
     if (options.id) el.id = options.id
     if (options.className) el.className = options.className
     attrs = options.attributes
@@ -263,6 +284,7 @@ CompilerProto.setupElement = function (options) {
     }
 
     return el
+    // 到目前为止，el 还一直是一个 DocumentFragment，一直没有被挂载。
 }
 
 /**
@@ -323,42 +345,48 @@ CompilerProto.resolveContent = function () {
  *  The observer listens for get/set/mutate events on all VM
  *  values/objects and trigger corresponding binding updates.
  *  It also listens for lifecycle hooks.
+ *  建立 observer，监听 vm 上的所有值，也监听生命周期钩子。
  */
 CompilerProto.setupObserver = function () {
 
     var compiler = this,
         bindings = compiler.bindings,
         options  = compiler.options,
-        observer = compiler.observer = new Emitter(compiler.vm)
+        observer = compiler.observer = new Emitter(compiler.vm) // observer 是一个 Emitter 实例，参数是当前 vm 实例。
 
     // a hash to hold event proxies for each root level key
     // so they can be referenced and removed later
     observer.proxies = {}
 
     // add own listeners which trigger binding updates
+    // 注册三个事件。
     observer
         .on('get', onGet)
         .on('set', onSet)
         .on('mutate', onSet)
 
-    // register hooks
+    // 注册所有钩子。
     var i = hooks.length, j, hook, fns
     while (i--) {
-        hook = hooks[i]
-        fns = options[hook]
+        hook = hooks[i] // 当前钩子名称。
+        fns = options[hook] // options 中指定的生命周期钩子。
         if (Array.isArray(fns)) {
+            // fns 可能是一个数组
             j = fns.length
             // since hooks were merged with child at head,
             // we loop reversely.
             while (j--) {
+                // 递归注册所有钩子。
                 registerHook(hook, fns[j])
             }
         } else if (fns) {
+            // 直接注册钩子
             registerHook(hook, fns)
         }
     }
 
     // broadcast attached/detached hooks
+    // 注册事件，attached 和 detached 事件发生时分别广播 1 和 0。
     observer
         .on('hook:attached', function () {
             broadcast(1)
@@ -367,6 +395,10 @@ CompilerProto.setupObserver = function () {
             broadcast(0)
         })
 
+    /**
+     * 
+     * @param {*} key 
+     */
     function onGet (key) {
         check(key)
         DepsParser.catcher.emit('get', bindings[key])
@@ -378,9 +410,14 @@ CompilerProto.setupObserver = function () {
         bindings[key].update(val)
     }
 
+    /**
+     * 注册生命周期钩子函数。
+     * @param {string} hook 钩子名称，比如 created
+     * @param {Function} fn 钩子函数
+     */
     function registerHook (hook, fn) {
         observer.on('hook:' + hook, function () {
-            fn.call(compiler.vm)
+            fn.call(compiler.vm) // 确保钩子函数内部的 this 指向 Vue 实例。
         })
     }
 
@@ -705,13 +742,14 @@ CompilerProto.bindDirective = function (directive, bindingOwner) {
 
 /**
  *  Create binding and attach getter/setter for a key to the viewmodel object
+ *  创建绑定，设置 setter 和 getter。
  */
 CompilerProto.createBinding = function (key, directive) {
 
     utils.log('  created binding: ' + key)
 
     var compiler = this,
-        methods  = compiler.options.methods,
+        methods  = compiler.options.methods, // options 配置的 methods 方法集合。
         isExp    = directive && directive.isExp,
         isFn     = (directive && directive.isFn) || (methods && methods[key]),
         bindings = compiler.bindings,
@@ -1030,6 +1068,7 @@ CompilerProto.destroy = function (noRemove) {
 
 /**
  *  shorthand for getting root compiler
+ *  获取最顶层的 compiler
  */
 function getRoot (compiler) {
     while (compiler.parent) {

@@ -1,3 +1,8 @@
+/**
+ * 根据字符串生成 DocumentFragment 元素。
+ * 代码来源于 https://github.com/component/domify
+ */
+
 // string -> DOM conversion
 // wrappers originally from jQuery, scooped from component/domify
 var map = {
@@ -35,22 +40,25 @@ module.exports = function (templateString) {
         m = TAG_RE.exec(templateString)
     // text only
     if (!m) {
+        // templateString 是纯文本（不包含 html 标签）时，创建一个 text 节点并返回。
         frag.appendChild(document.createTextNode(templateString))
         return frag
     }
 
     var tag = m[1],
         wrap = map[tag] || map._default,
-        depth = wrap[0],
-        prefix = wrap[1],
-        suffix = wrap[2],
+        depth = wrap[0], // 包裹层级
+        prefix = wrap[1], // 前置
+        suffix = wrap[2], // 后置
         node = document.createElement('div')
 
     node.innerHTML = prefix + templateString.trim() + suffix
+    // 剥离出由 templateString 构造的最原始的 DOM。
     while (depth--) node = node.lastChild
 
     // one element
     if (node.firstChild === node.lastChild) {
+        // node 只有一个子元素的时候（templateString 只有一个根标签），直接追加到 frag。
         frag.appendChild(node.firstChild)
         return frag
     }
@@ -59,6 +67,7 @@ module.exports = function (templateString) {
     var child
     /* jshint boss: true */
     while (child = node.firstChild) {
+        // 如果有多个根元素，依次附加到 frag。
         frag.appendChild(child)
     }
     return frag

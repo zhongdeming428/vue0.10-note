@@ -12,7 +12,9 @@ var Compiler   = require('./compiler'),
     nextTick   = utils.nextTick,
 
     // batch $watch callbacks
+    // 实例化一个 batcher 队列用于存储 watch 的所有回调。
     watcherBatcher = new Batcher(),
+    // watcherId 是实例方法 $watch 注册回调函数时要使用的 id。
     watcherId      = 1
 
 /**
@@ -48,6 +50,7 @@ def(VMProto, '$init', function (options) {
  */
 def(VMProto, '$get', function (key) {
     var val = utils.get(this, key)
+    // 如果自身没有该属性，则到父对象上查找，直到找到或者到达根节点为止。
     return val === undefined && this.$parent
         ? this.$parent.$get(key)
         : val
@@ -64,6 +67,7 @@ def(VMProto, '$set', function (key, value) {
 /**
  *  watch a key on the viewmodel for changes
  *  fire callback with new value
+ *  监听 Vue 实例上的一个属性，当其发生变化的时候进行回调。
  */
 def(VMProto, '$watch', function (key, callback) {
     // save a unique id for each watcher
@@ -80,6 +84,8 @@ def(VMProto, '$watch', function (key, callback) {
         })
     }
     callback._fn = on
+    // self.$compiler 在 compiler.js 中指定，是一个 Compiler 实例。
+    // ???先看 compiler……
     self.$compiler.observer.on('change:' + key, on)
 })
 

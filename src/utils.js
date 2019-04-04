@@ -16,6 +16,8 @@ var defer =
 
 /**
  *  Normalize keypath with possible brackets into dot notations
+ *  example：
+ *  normalizeKeypath('["as"]["ad"]') => ".as.ad"
  */
 function normalizeKeypath (key) {
     return key.indexOf('[') < 0
@@ -38,16 +40,20 @@ var utils = module.exports = {
 
     /**
      *  get a value from an object keypath
+     *  根据给定的对象及路径，获取对象属性。
      */
     get: function (obj, key) {
         /* jshint eqeqeq: false */
+        // 先规范化路径参数。
         key = normalizeKeypath(key)
         if (key.indexOf('.') < 0) {
+            // 如果只有一个字符串，直接作为键获取属性值。
             return obj[key]
         }
         var path = key.split('.'),
             d = -1, l = path.length
         while (++d < l && obj != null) {
+            // 递归获取深层对象属性值。
             obj = obj[path[d]]
         }
         return obj
@@ -67,6 +73,7 @@ var utils = module.exports = {
             d = -1, l = path.length - 1
         while (++d < l) {
             if (obj[path[d]] == null) {
+                // 如果不存在该属性，就新建一个空对象。
                 obj[path[d]] = {}
             }
             obj = obj[path[d]]
@@ -108,7 +115,7 @@ var utils = module.exports = {
      *  Define an ienumerable property
      *  This avoids it being included in JSON.stringify
      *  or for...in loops.
-     *  设置指定对象的指定属性的 property。
+     *  设置指定对象的指定属性的 property，不传 enumerable 和 writable 的时候，默认属性不可枚举、不可修改。
      */
     defProtected: function (obj, key, val, enumerable, writable) {
         def(obj, key, {
@@ -244,6 +251,7 @@ var utils = module.exports = {
             }
         }
         if (template) {
+            // 对 template 进行预处理，返回一个 DocumentFragment。
             options.template = utils.parseTemplateOption(template)
         }
     },

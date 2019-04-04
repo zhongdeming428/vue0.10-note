@@ -13,15 +13,19 @@ var Emitter  = require('./emitter'),
     // define methods as inenumerable if __proto__ is present,
     // otherwise enumerable so we can loop through and manually
     // attach to array instances
+    // 根据 __proto__ 是否存在来定义一些方法。
+    // 如果存在就定义为不可枚举的，不存在就定义为可枚举的，以便于手动遍历然后绑定到数组实例。
     hasProto = ({}).__proto__
 
 // Array Mutation Handlers & Augmentations ------------------------------------
 
 // The proxy prototype to replace the __proto__ of
 // an observed array
+// 代理的数组原型对象，会对数组原型方法做一些处理，实现监听数组元素变化，弥补 Object.property 的不足。
 var ArrayProxy = Object.create(Array.prototype)
 
 // intercept mutation methods
+// 这些方法将会被代理到 ArrayProxy。
 ;[
     'push',
     'pop',
@@ -53,18 +57,21 @@ def(ArrayProxy, '$remove', function (index) {
  */
 function watchMutation (method) {
     def(ArrayProxy, method, function () {
-
+        // 先缓存参数和结果。
         var args = slice.call(arguments),
             result = Array.prototype[method].apply(this, args),
             inserted, removed
 
         // determine new / removed elements
+        // 确定是新增还是删除数组元素。
         if (method === 'push' || method === 'unshift') {
             inserted = args
         } else if (method === 'pop' || method === 'shift') {
             removed = [result]
         } else if (method === 'splice') {
+            // splice 方法第三个参数开始是新增到数组的参数。
             inserted = args.slice(2)
+            // 返回的结果是被删除的数组元素。
             removed = result
         }
         
@@ -73,6 +80,7 @@ function watchMutation (method) {
         unlinkArrayElements(this, removed)
 
         // emit the mutation event
+        // 发布数组修改时间，传递修改信息。
         this.__emitter__.emit('mutate', '', this, {
             method   : method,
             args     : args,
@@ -89,6 +97,8 @@ function watchMutation (method) {
 /**
  *  Link new elements to an Array, so when they change
  *  and emit events, the owner Array can be notified.
+ *  监听数组中新增的元素。
+ *  arr 是要修改的数组，items 是要新增的元素。
  */
 function linkArrayElements (arr, items) {
     if (items) {
@@ -98,6 +108,7 @@ function linkArrayElements (arr, items) {
             if (isWatchable(item)) {
                 // if object is not converted for observing
                 // convert it...
+                // __emitter__ 是一个 Emitter 实例，先看 emitter.js
                 if (!item.__emitter__) {
                     convert(item)
                     watch(item)
@@ -113,6 +124,7 @@ function linkArrayElements (arr, items) {
 
 /**
  *  Unlink removed elements from the ex-owner Array.
+ *  对于被删除的数组元素，删除他们的 owners 属性。
  */
 function unlinkArrayElements (arr, items) {
     if (items) {
@@ -128,15 +140,17 @@ function unlinkArrayElements (arr, items) {
 }
 
 // Object add/delete key augmentation -----------------------------------------
-
+// 对象的代理原型。
 var ObjProxy = Object.create(Object.prototype)
 
+// 给被代理的对象添加属性，如果存在就直接返回。
 def(ObjProxy, '$add', function (key, val) {
     if (hasOwn.call(this, key)) return
     this[key] = val
-    convertKey(this, key, true)
+    convertKey(this, key, true) // 定义 getter 和 setter。
 }, !hasProto)
 
+// 给被代理的对象删除属性，如果不存在就直接返回。
 def(ObjProxy, '$delete', function (key) {
     if (!(hasOwn.call(this, key))) return
     // trigger set events
@@ -149,6 +163,7 @@ def(ObjProxy, '$delete', function (key) {
 
 /**
  *  Check if a value is watchable
+ *  检查对象是否是可以被监听的（非空对象并且不包含 $compiler 属性）。
  */
 function isWatchable (obj) {
     return typeof obj === 'object' && obj && !obj.$compiler
@@ -156,11 +171,13 @@ function isWatchable (obj) {
 
 /**
  *  Convert an Object/Array to give it a change emitter.
+ *  处理对象，添加 __emitter__ 等属性。如果已经有 __emitter__ 则返回 true，否则添加该属性然后返回 false。
  */
 function convert (obj) {
     if (obj.__emitter__) return true
     var emitter = new Emitter()
     def(obj, '__emitter__', emitter)
+    // 注册 set 和 mutate 事件。
     emitter
         .on('set', function (key, val, propagate) {
             if (propagate) propagateChange(obj)
@@ -169,6 +186,7 @@ function convert (obj) {
             propagateChange(obj)
         })
     emitter.values = utils.hash()
+    // 添加了 owners 属性。
     emitter.owners = []
     return false
 }
@@ -232,26 +250,33 @@ function watchArray (arr) {
  *  Define accessors for a property on an Object
  *  so it emits get/set events.
  *  Then watch the value itself.
+ *  该函数定义对象指定属性的 setter 和 getter，以实现数据劫持。
  */
 function convertKey (obj, key, propagate) {
     var keyPrefix = key.charAt(0)
+    // $ 或者 _ 开头的对象属性不会被劫持，这个可以用于性能优化，对于不必监听的数据使用下划线或者美元符开头来命名。
     if (keyPrefix === '$' || keyPrefix === '_') {
         return
     }
     // emit set on bind
     // this means when an object is observed it will emit
     // a first batch of set events.
+    // 获取对象的 emitter 属性，以便于发布订阅事件。
     var emitter = obj.__emitter__,
         values  = emitter.values
 
     init(obj[key], propagate)
 
+    // Object.defineProperty
+    // 设置被监听对象的 property。
     oDef(obj, key, {
         enumerable: true,
         configurable: true,
         get: function () {
+            // emitter.values 是数据缓存中心。get 和 set 都对它进行操作。
             var value = values[key]
             // only emit get on tip values
+            // 只有在转换 dependency 的时候才发射 get 事件。后面再看 deps-parser.js。
             if (pub.shouldGet) {
                 emitter.emit('get', key)
             }
@@ -259,20 +284,27 @@ function convertKey (obj, key, propagate) {
         },
         set: function (newVal) {
             var oldVal = values[key]
+            // 停止监听旧的数据。
             unobserve(oldVal, key, emitter)
             copyPaths(newVal, oldVal)
             // an immediate property should notify its parent
             // to emit set for itself too
+            // 监听新的数据。
             init(newVal, true)
         }
     })
 
+    // 缓存属性值到 emitter.values，发射 set 事件，监听当前属性值。
     function init (val, propagate) {
+        // 把属性值挂载到 emitter 对象上。
         values[key] = val
+        // 初始化的时候就发射 set 事件。
         emitter.emit('set', key, val, propagate)
         if (isArray(val)) {
+            // 如果是数组，适配传参。
             emitter.emit('set', key + '.length', val.length, propagate)
         }
+        // 调用 observe 实现订阅。
         observe(val, key, emitter)
     }
 }
@@ -284,6 +316,7 @@ function convertKey (obj, key, propagate) {
  *  all of its properties.
  */
 function emitSet (obj) {
+    // obj 是已经被转化了的对象，本身包含 __emitter__ 属性。
     var emitter = obj && obj.__emitter__
     if (!emitter) return
     if (isArray(obj)) {
@@ -291,6 +324,7 @@ function emitSet (obj) {
     } else {
         var key, val
         for (key in obj) {
+            // 如果不是数组，则循环递归地 emitSet 并发射 set 事件。
             val = obj[key]
             emitter.emit('set', key, val)
             emitSet(val)
@@ -303,6 +337,8 @@ function emitSet (obj) {
  *  in a new object.
  *  So when an object changes, all missing keys will
  *  emit a set event with undefined value.
+ *  为了能够监听对象属性的删除，需要匹配两个新旧对象的所有属性。
+ *  把旧对象内所有键映射到新对象，不存在属性值的需要赋默认值，方便后续比较。
  */
 function copyPaths (newObj, oldObj) {
     if (!isObject(newObj) || !isObject(oldObj)) {
@@ -330,14 +366,17 @@ function copyPaths (newObj, oldObj) {
  */
 function ensurePath (obj, key) {
     var path = key.split('.'), sec
+    //注意这里是 path.length - 1。
     for (var i = 0, d = path.length - 1; i < d; i++) {
         sec = path[i]
         if (!obj[sec]) {
             obj[sec] = {}
+            // 如果能够被监听，就监听。
             if (obj.__emitter__) convertKey(obj, sec)
         }
         obj = obj[sec]
     }
+    // 最后一个属性，最深的路径。
     if (isObject(obj)) {
         sec = path[i]
         if (!(hasOwn.call(obj, sec))) {
@@ -352,9 +391,10 @@ function ensurePath (obj, key) {
 /**
  *  Observe an object with a given path,
  *  and proxy get/set/mutate events to the provided observer.
+ *  ??? 后面再看……
  */
 function observe (obj, rawPath, observer) {
-
+    // 如果不能被监听，直接返回。
     if (!isWatchable(obj)) return
 
     var path = rawPath ? rawPath + '.' : '',
@@ -399,10 +439,12 @@ function observe (obj, rawPath, observer) {
         .on('mutate', proxies.mutate)
 
     if (alreadyConverted) {
+        // 如果已经是有 __emitter__ 属性的对象，调用 emitSet。
         // for objects that have already been converted,
         // emit set events for everything inside
         emitSet(obj)
     } else {
+        // 新转化的 obj 需要调用 watch 进行监听。
         watch(obj)
     }
 }
@@ -439,8 +481,8 @@ var pub = module.exports = {
     observe     : observe,
     unobserve   : unobserve,
     ensurePath  : ensurePath,
-    copyPaths   : copyPaths,
+    copyPaths   : copyPaths, // 匹配新旧对象的所有属性，新对象中不存在的属性要被补齐并赋初值。
     watch       : watch,
-    convert     : convert,
-    convertKey  : convertKey
+    convert     : convert, // 处理对象，添加 __emitter__ 等属性。
+    convertKey  : convertKey // 该函数定义对象指定属性的 setter 和 getter，以实现数据劫持。
 }

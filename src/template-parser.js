@@ -1,3 +1,7 @@
+/**
+ * 返回一个生成 DocumentFragment 实例的工厂方法。
+ */
+
 var toFragment = require('./fragment');
 
 /**
@@ -13,20 +17,25 @@ var toFragment = require('./fragment');
 module.exports = function(template) {
     var templateNode;
 
+    // https://developer.mozilla.org/zh-CN/docs/Web/API/DocumentFragment
     if (template instanceof window.DocumentFragment) {
+        // 如果 template 已经是一个 DocumentFragment 实例，则不做任何处理。
         // if the template is already a document fragment -- do nothing
         return template
     }
 
     if (typeof template === 'string') {
+        // 如果 template 是一个字符串。
         // template by ID
         if (template.charAt(0) === '#') {
+            // 如果 template 是一个 id 字符串。
             templateNode = document.getElementById(template.slice(1))
             if (!templateNode) return
         } else {
             return toFragment(template)
         }
     } else if (template.nodeType) {
+        // https://developer.mozilla.org/en-US/docs/Web/API/Node/nodeType
         templateNode = template
     } else {
         return
@@ -34,6 +43,8 @@ module.exports = function(template) {
 
     // if its a template tag and the browser supports it,
     // its content is already a document fragment!
+    // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template
+    // 如果 template 是一个 template 元素，那么代表浏览器支持 template 元素，其内部的元素即为 DocumentFragment 实例。
     if (templateNode.tagName === 'TEMPLATE' && templateNode.content) {
         return templateNode.content
     }
