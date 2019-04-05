@@ -675,9 +675,14 @@ CompilerProto.compileTextNode = function (node) {
 /**
  *  Parse a directive name/value pair into one or more
  *  directive instances
+ *  ??? directive 转化器。
+ *  name => directive 名，比如 lazy……
+ *  value => 具体属性名，比如 'v-table'……
+ *  el => 
  */
 CompilerProto.parseDirective = function (name, value, el, multiple) {
     var compiler = this,
+        // 获取具体定义。
         definition = compiler.getOption('directives', name)
     if (definition) {
         // parse into AST-like objects
@@ -687,12 +692,14 @@ CompilerProto.parseDirective = function (name, value, el, multiple) {
             : build(asts[0])
     }
     function build (ast) {
+        // 构建 Directive 实例。
         return new Directive(name, ast, definition, compiler, el)
     }
 }
 
 /**
  *  Add a directive instance to the correct binding & viewmodel
+ *  绑定 directive 指令。
  */
 CompilerProto.bindDirective = function (directive, bindingOwner) {
 
@@ -814,12 +821,15 @@ CompilerProto.defineDataProp = function (key, binding) {
 
     // if the data object is already observed, but the key
     // is not observed, we need to add it to the observed keys.
+    // ob 是一个 Emitter 实例，ob.values 是数据中介，如果 ob.values 不包含当前键，说明没有被监听，需要调用 convertKey。
     if (ob && !(hasOwn.call(ob.values, key))) {
         Observer.convertKey(data, key)
     }
 
     binding.value = data[key]
 
+    // 设置 vm 上属性的 getter 和 setter。
+    // 使得修改 this.a 会影响 this.data.a……
     def(compiler.vm, key, {
         get: function () {
             return compiler.data[key]
@@ -902,17 +912,23 @@ CompilerProto.markComputed = function (binding, value) {
 
 /**
  *  Retrive an option from the compiler
+ *  type => options 里的键，比如 components、directives。
+ *  id => 具体的 id 名称，比如 directive 的名称。
  */
 CompilerProto.getOption = function (type, id, silent) {
     var opts = this.options,
         parent = this.parent,
-        globalAssets = config.globalAssets,
+        globalAssets = config.globalAssets, // 在 main.js 里面定义，包含了一些公共资源。
+        // 先从 options 里面拿具体值，不存在的话就去父对象（options.parent 指定的 Vue 实例）拿，再不行就拿公共资源。
+        // 所以可以看到分类中定义的组件，子类中仍然可用。
         res = (opts[type] && opts[type][id]) || (
             parent
                 ? parent.getOption(type, id, silent)
                 : globalAssets[type] && globalAssets[type][id]
         )
     if (!res && !silent && typeof id === 'string') {
+        // 找不到值并且
+        // silent 为 false 的时候发出警告。
         utils.warn('Unknown ' + type.slice(0, -1) + ': ' + id)
     }
     return res

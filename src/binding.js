@@ -4,7 +4,7 @@ var Batcher        = require('./batcher'),
 
 /**
  *  Binding class.
- *
+ *  先看 directives 和 directive.js。
  *  each property on the viewmodel has one corresponding Binding object
  *  which has multiple directive instances on the DOM
  *  and multiple computed property dependents
@@ -12,14 +12,14 @@ var Batcher        = require('./batcher'),
 function Binding (compiler, key, isExp, isFn) {
     this.id = bindingId++
     this.value = undefined
-    this.isExp = !!isExp
+    this.isExp = !!isExp // is expression。
     this.isFn = isFn
     this.root = !this.isExp && key.indexOf('.') === -1
     this.compiler = compiler
     this.key = key
-    this.dirs = []
-    this.subs = []
-    this.deps = []
+    this.dirs = [] // directives
+    this.subs = [] // subscriptions
+    this.deps = [] // dependencies
     this.unbound = false
 }
 
@@ -34,6 +34,7 @@ BindingProto.update = function (value) {
     }
     if (this.dirs.length || this.subs.length) {
         var self = this
+        // 推入到 binding 队列。
         bindingBatcher.push({
             id: this.id,
             execute: function () {
@@ -52,9 +53,10 @@ BindingProto._update = function () {
     var i = this.dirs.length,
         value = this.val()
     while (i--) {
+        // 遍历所有 directive，用最新的 value 更新。
         this.dirs[i].$update(value)
     }
-    this.pub()
+    this.pub() // 通知所有订阅者更新。
 }
 
 /**
@@ -63,13 +65,14 @@ BindingProto._update = function () {
  */
 BindingProto.val = function () {
     return this.isComputed && !this.isFn
-        ? this.value.$get()
-        : this.value
+        ? this.value.$get() // 如果是 computed 值，计算后返回。
+        : this.value // 不是计算值，直接返回 this.value。
 }
 
 /**
  *  Notify computed properties that depend on this binding
  *  to update themselves
+ *  执行所有订阅者的 update。
  */
 BindingProto.pub = function () {
     var i = this.subs.length
@@ -89,6 +92,7 @@ BindingProto.unbind = function () {
     this.unbound = true
     var i = this.dirs.length
     while (i--) {
+        // 调用所有 directive 的解绑方法。
         this.dirs[i].$unbind()
     }
     i = this.deps.length

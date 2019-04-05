@@ -9,6 +9,11 @@ var dirId           = 1,
 /**
  *  Directive class
  *  represents a single directive instance in the DOM
+ *  name => 指令名称。
+ *  ast => 类 AST 对象。
+ *  definition => 指令的配置对象。
+ *  compiler => 对应的 Compiler 实例。
+ *  el => 
  */
 function Directive (name, ast, definition, compiler, el) {
 
@@ -85,6 +90,7 @@ var DirProto = Directive.prototype
  *  called when a new value is set 
  *  for computed properties, this will only be called once
  *  during initialization.
+ *  更新钩子。
  */
 DirProto.$update = function (value, init) {
     if (this.$lock) return
@@ -128,6 +134,7 @@ DirProto.$unbind = function () {
 /**
  *  Parse a directive string into an Array of
  *  AST-like objects representing directives
+ *  把指令字符串转换为类 AST 对象数组。
  */
 Directive.parse = function (str) {
 
@@ -144,6 +151,7 @@ Directive.parse = function (str) {
         arg
 
     for (var c, i = 0, l = str.length; i < l; i++) {
+        // 遍历字符串中的每一个字符。
         c = str.charAt(i)
         if (inSingle) {
             // check single quote
